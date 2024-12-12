@@ -1,116 +1,171 @@
 from pytubefix import YouTube
-from pytubefix.cli import on_progress
-from moviepy import VideoFileClip, AudioFileClip
+import ffmpeg
 import os
+import requests
+from pathlib import Path
+import sys
 
 class colors:
     RED = '\033[31m'
     ENDC = '\033[0m'
+    GREEN  = '\033[32m'
+    BLUE   = "\033[34m"
+    PURPLE = "\033[35m"
+    CYAN   = "\033[36m"
+    WHITE  = "\033[37m"
+    YELLOW = "\033[33m"
 
 def Main():
     # Asking user input for a url
     url = input(f"{colors.RED}Type in the url of which video you'd like to download: {colors.ENDC}")
 
     # Setting parameters
-    yt = YouTube(url=url)
+    yt = YouTube(url)
     title = yt.title
-    print("Found a video titled: ", title)
+    '''
+    try:
+        check_url = requests.get(url, timeout = 3)
+    except requests.exceptions.RequestException as e:
+        print(f"{colors.RED}Video url was not found. Make sure you have a valid url.{colors.ENDC}")
+        sys.exit(1)'''
 
-    # Change the path where you want to download the video.
+    print(f"{colors.GREEN}Found a video titled: {title}")
+
+    # User-defined download path
     library_path = input(f"{colors.RED}Type the exact location where you want to store your video: {colors.ENDC}")
+    # library_path = "/home/momomizu/Videos"
 
-    # Setting temporary file locations
-    videofile_name = library_path+"/TEMP_video.mp4"
-    audiofile_name = library_path+"/TEMP_audio.m4a"
+    # Setting temporary file names
+    video_file = Path(library_path) / "TEMP_video.mp4"
+    audio_file = Path(library_path) / "TEMP_audio.aac"
 
-    return Downloader(yt, library_path, title, audiofile_name, videofile_name)
+    return Downloader(yt, library_path, title, audio_file, video_file)
 
-def Downloader(yt, library_path, title, audiofile_name, videofile_name):
-    print("Video download is starting, this might take a while depending on the video length & quality...")
+def Downloader(yt, library_path, title, audio_file, video_file):
+    print(f"{colors.GREEN}Video download is starting...{colors.ENDC}")
 
-    # Specifiying the download parameters for pytubefix
+    # Download video & audio streams
     video_stream = yt.streams.filter(adaptive=True, file_extension='mp4', only_video=True).order_by('bitrate').desc().first()
-    audio_stream = yt.streams.filter(adaptive=True, file_extension='mp4', only_audio=True).order_by('abr').desc().first()
+    audio_stream = yt.streams.filter(adaptive=True, only_audio=True).order_by('abr').desc().first()
 
-    # Specifiying download names and paths
-    video_stream.download(filename="TEMP_video.mp4", output_path=library_path)
-    audio_stream.download(filename="TEMP_audio.m4a", output_path=library_path)
+    if audio_stream is None:
+        print(f"{colors.RED}No suitable audio stream found, attempting different formats...{colors.ENDC}")
 
-    print("The video download has finished.")
+        # Try a different filter, for example, looking for `m4a` or `webm` formats
+        audio_stream = yt.streams.filter(adaptive=True, only_audio=True, file_extension='m4a').first()
 
-    # A while statement for asking user an input. If not correct, return to where this asks for user input
-    valid_input = False
-    while not valid_input:
-        encoder_of_choice = input(f"{colors.RED}Next, please specify whether you want to use NVENC (GPU), libx264 (CPU) or rawfile encoder. Results may vary depending on which you choose: {colors.ENDC}")
-        
-        # GPU encoding
-        if encoder_of_choice == "NVENC" or encoder_of_choice == "nvenc" or encoder_of_choice == "GPU" or encoder_of_choice == "gpu" or encoder_of_choice == "nvidia":
-            ConverterNVENC(library_path, title, audiofile_name, videofile_name)
-            valid_input = True
-        
-        # CPU encoding
-        elif encoder_of_choice == "LIBX264" or encoder_of_choice == "libx264" or encoder_of_choice == "CPU" or encoder_of_choice == "cpu":
-            ConverterLIBX264(library_path, title, audiofile_name, videofile_name)
-            valid_input = True
-        
-        # Rawfile encofing
-        elif encoder_of_choice == "rawfile" or encoder_of_choice == "raw":
-            ConverterRaw(library_path, title, audiofile_name, videofile_name)
-            valid_input = True
-        
-        # Invalid input
-        else:
-            print("Couldn't understand your choice, please retype your choice")
+        if audio_stream is None:
+            audio_stream = yt.streams.filter(adaptive=True, only_audio=True, file_extension='webm').first()
 
-def ConverterLIBX264(library_path, title, audiofile_name, videofile_name):
-    print("Video encoding process starting...")
+    # If still no audio stream found
+    if audio_stream is None:
+        print(f'{colors.RED}Error: No audio stream found.{colors.ENDC}')
+        return  # Exit the function or handle the error appropriately
 
-    # Setting video & audio clips for encoding
-    video_clip = VideoFileClip(library_path + "/" + "TEMP_video.mp4")
-    audio_clip = AudioFileClip(library_path + "/" + "TEMP_audio.m4a")
+    # Download video and audio
+    print(f"{colors.GREEN}Downloading video and audio...")
+    video_stream.download(output_path=library_path, filename="TEMP_video.mp4")
+    audio_stream.download(output_path=library_path, filename="TEMP_audio.aac")
 
-    # Outcome clip
-    final_clip = video_clip.with_audio(audio_clip)
-    final_clip.write_videofile(library_path+"/"+title+".mp4", codec='libx264', threads=24)
+    print(f"{colors.GREEN}Download complete.")
 
-    # Removing excess files
-    print("Cleaning up the working folders...")
-    os.remove(audiofile_name)
-    os.remove(videofile_name)
-    print("Done, enjoy your video :)")
+    # Prompt user for encoding choice
+    encoder_choice = GetEncoderOfChoice()
 
-def ConverterNVENC(library_path, title, audiofile_name, videofile_name):
-    print("Video encoding process starting...")
+    if encoder_choice in ['NVENC', 'nvenc', 'GPU', 'gpu']:
+        ConverterNVENC(library_path, title, audio_file, video_file)
+    
+    elif encoder_choice in ['libx264', 'LIBX264', 'CPU', 'cpu']:
+        ConverterLIBX264(library_path, title, audio_file, video_file)
+    
+    elif encoder_choice in ['raw', 'rawfile', 'RAW', 'RAWFILE']:
+        ConverterRaw(library_path, title, audio_file, video_file)
+    
+    else:
+        print(f"{colors.RED}Invalid choice. Please try again.{colors.ENDC}")
+        return Downloader(yt, library_path, title, audio_file, video_file)
 
-    # Setting video & audio clips for encoding
-    video_clip = VideoFileClip(library_path + "/" + "TEMP_video.mp4")
-    audio_clip = AudioFileClip(library_path + "/" + "TEMP_audio.m4a")
+def GetEncoderOfChoice():
+    """Prompt user for encoding choice."""
+    while True:
+        encoder_choice = input(f"{colors.RED}Please choose an encoder (NVENC (GPU), libx264 (CPU), rawfile): {colors.ENDC}")
+        if encoder_choice in ['NVENC', 'nvenc', 'GPU', 'gpu', 'libx264', 'LIBX264', 'CPU', 'cpu', 'rawfile', 'raw', 'RAW', 'RAWFILE']:
+            return encoder_choice
+        print(f"{colors.RED}Invalid input. Please choose again.{colors.ENDC}")
 
-    # Outcome clip
-    final_clip = video_clip.with_audio(audio_clip)
-    final_clip.write_videofile(library_path+"/"+title+".mp4", codec='hevc_nvenc', threads=32)
+# Jatka värien lisäilyä!!!! + Parempi väri vihreän sijaan??
+def ConverterLIBX264(library_path, title, audio_file, video_file):
+    print("Encoding video using libx264...")
 
-    # Removing excess files
-    print("Cleaning up the working folders...")
-    os.remove(audiofile_name)
-    os.remove(videofile_name)
-    print("Done, enjoy your video :)")
+    output_path = Path(library_path) / f"{title}.mp4"
 
-def ConverterRaw(library_path, title, audiofile_name, videofile_name):
-    print("Video encoding process starting...")
+    # Convert Path objects to string objects before passing to ffmpeg
+    video_file_str = str(video_file)
+    audio_file_str = str(audio_file)
 
-    # Setting video & audio clips for encoding
-    video_clip = VideoFileClip(library_path + "/" + "TEMP_video.mp4")
-    audio_clip = AudioFileClip(library_path + "/" + "TEMP_audio.m4a")
+    # FFmpeg command for libx264
+    (
+        ffmpeg
+        .concat(ffmpeg.input(video_file_str), ffmpeg.input(audio_file_str), v=1, a=1)
+        .output(str(output_path), vcodec='libx264', acodec='aac', threads=16, preset='medium', \
+        crf=10, movflags='faststart', loglevel='quiet')
+        .run()
+    )
 
-    # Outcome clip
-    final_clip = video_clip.with_audio(audio_clip)
-    final_clip.write_videofile(library_path+"/"+title+".avi", codec='png', threads=24)
+    print(f"Video encoding complete: {output_path}")
+    CleanUp(audio_file, video_file)
 
-    # Removing excess files
-    print("Cleaning up the working folders...")
-    os.remove(audiofile_name)
-    os.remove(videofile_name)
-    print("Done, enjoy your video :)")
+def ConverterNVENC(library_path, title, audio_file, video_file):
+    print("Encoding video using Nvenc...")
 
-Main()
+    output_path = Path(library_path) / f"{title}.mp4"
+
+    # Convert Path objects to string objects before passing to ffmpeg
+    video_file_str = str(video_file)
+    audio_file_str = str(audio_file)
+
+    # FFmpeg command for Nvenc (gpu)
+    (
+        ffmpeg
+        .concat(ffmpeg.input(video_file_str), ffmpeg.input(audio_file_str), v=1, a=1)
+        .output(library_path+"/"+title+".mp4", vcodec='hevc_nvenc', acodec='aac', preset='fast', crf=0, \
+        movflags='faststart', loglevel='quiet')
+        .run()
+    )
+
+    print(f"Video encoding complete: {output_path}")
+    CleanUp(audio_file, video_file)
+
+
+def ConverterRaw(library_path, title, audio_file, video_file):
+    print("Encoding video using png...")
+
+    # Convert Path objects to string objects before passing to ffmpeg
+    video_file_str = str(video_file)
+    audio_file_str = str(audio_file)
+
+    # FFmpeg command for Nvenc (gpu)
+    (
+        ffmpeg
+        .concat(ffmpeg.input(video_file_str), ffmpeg.input(audio_file_str), v=1, a=1)
+        .output(library_path+"/"+title+".avi", vcodec='png', acodec='aac', threads=16, preset='veryslow', \
+        crf=0, movflags='faststart', loglevel='quiet')
+        .run()
+    )
+
+    print(f"Video encoding complete: {output_path}")
+    CleanUp(audio_file, video_file)
+
+def CleanUp(video_file, audio_file):
+    """Remove temporary files after encoding."""
+    os.remove(audio_file)
+    os.remove(video_file)
+    print("Cleaned up temporary files.")
+
+if __name__ == '__main__':
+    Main()
+
+# TODO:
+# Lisää paremmat error viestit eri kohtiin. esim joissa kysytään user inputtia.
+# Kokeile buildaa ffmpeg viel uusiks tarvittavil moduuleil, jos ton hvencin sais toimii paremmal laadul
+# Tee executable täst

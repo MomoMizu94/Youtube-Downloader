@@ -1,2 +1,3 @@
 pytubefix
-moviepy
+ffmpeg-python
+requests
