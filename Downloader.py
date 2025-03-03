@@ -107,8 +107,8 @@ def Downloader(yt, title, library_path, audio_file, video_file):
     if encoder_choice in ['NVENC', 'nvenc', 'GPU', 'gpu', '1']:
         ConverterNVENC(library_path, title, audio_file, video_file)
     
-    elif encoder_choice in ['libx264', 'LIBX264', 'CPU', 'cpu', '2']:
-        ConverterLIBX264(library_path, title, audio_file, video_file)
+    elif encoder_choice in ['libx265', 'LIBX265', 'CPU', 'cpu', '2']:
+        ConverterLIBX265(library_path, title, audio_file, video_file)
     
     elif encoder_choice in ['raw', 'rawfile', 'RAW', 'RAWFILE', '3']:
         ConverterRaw(library_path, title, audio_file, video_file)
@@ -122,8 +122,8 @@ def GetEncoderOfChoice():
 
     # Prompt user for encoding choice.
     while True:
-        encoder_choice = input(f"{colors.RED}Please choose an encoder: (arranged by filesize from smallest to biggest){colors.ENDC}\n 1. NVENC = GPU\n 2. libx264 = CPU\n 3. rawfile = CPU     ")
-        if encoder_choice in ['NVENC', 'nvenc', 'GPU', 'gpu', '1', 'libx264', 'LIBX264', 'CPU', 'cpu', '2', 'rawfile', 'raw', 'RAW', 'RAWFILE', '3']:
+        encoder_choice = input(f"{colors.RED}Please choose an encoder: (arranged by filesize from smallest to biggest){colors.ENDC}\n 1. NVENC = GPU\n 2. libx265 = CPU\n 3. rawfile = CPU     ")
+        if encoder_choice in ['NVENC', 'nvenc', 'GPU', 'gpu', '1', 'libx265', 'LIBX265', 'CPU', 'cpu', '2', 'rawfile', 'raw', 'RAW', 'RAWFILE', '3']:
             return encoder_choice
 
         print(f"{colors.RED}Invalid input. Please choose again.{colors.ENDC}")
@@ -154,9 +154,9 @@ def GetVideoDuration(video_file):
         raise
 
 
-def ConverterLIBX264(library_path, title, audio_file, video_file):
+def ConverterLIBX265(library_path, title, audio_file, video_file):
 
-    print(f"{colors.GREEN}Encoding video using libx264...{colors.ENDC}")
+    print(f"{colors.GREEN}Encoding video using libx265...{colors.ENDC}")
 
     # Sanitizing title to ensure there are no special characters that could cause issues
     safe_title = "".join(x for x in title if x.isalnum() or x.isspace()).replace(" ", "_")
@@ -169,7 +169,7 @@ def ConverterLIBX264(library_path, title, audio_file, video_file):
     # Initialize the ffmpeg command
     command = [
         'ffmpeg', '-i', video_file_str, '-i', audio_file_str,
-        '-c:v', 'libx264', '-c:a', 'aac', '-threads', '16', '-preset', 'medium',
+        '-c:v', 'libx265', '-c:a', 'aac', '-threads', '16', '-preset', 'medium',
         '-crf', '10', '-movflags', 'faststart', '-loglevel', 'info', '-y', str(output_path)
     ]
 
@@ -237,7 +237,10 @@ def ConverterNVENC(library_path, title, audio_file, video_file):
     # Initialize the ffmpeg command
     command = [
         'ffmpeg', '-i', video_file_str, '-i', audio_file_str,
-        '-c:v', 'hevc_nvenc', '-c:a', 'aac', '-preset', 'fast', '-crf', '0',
+        '-c:v', 'hevc_nvenc', '-c:a', 'aac', '-profile:v', 'main10', '-preset:v', 'p7', '-tune:v',
+        'uhq', '-highbitdepth', '1', '-multipass', 'fullres', '-rc:v', 'vbr', '-b:v', '0', '-cq', '28',
+        '-qmin', '15', '-g', '150', '-keyint_min', '15', '-rc-lookahead:v', '20', '-unidir_b', '1',
+        '-tf_level', '4', '-preset', 'fast', '-bufsize', '20M', '-crf', '0',
         '-movflags', 'faststart', '-loglevel', 'info', '-y', str(output_path)
     ]
 
