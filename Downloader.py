@@ -104,13 +104,16 @@ def Downloader(yt, title, library_path, audio_file, video_file):
     # Prompt user for encoding choice
     encoder_choice = GetEncoderOfChoice()
 
-    if encoder_choice in ['NVENC', 'nvenc', 'GPU', 'gpu', '1']:
+    if encoder_choice in ['NVENC', 'nvenc', 'NVIDIA', 'nvidia', '1']:
         ConverterNVENC(library_path, title, audio_file, video_file)
+
+    if encoder_choice in ['HEVC', 'hevc', 'AMD', 'amd', '2']:
+        ConverterHEVC(library_path, title, audio_file, video_file)
     
-    elif encoder_choice in ['libx265', 'LIBX265', 'CPU', 'cpu', '2']:
+    elif encoder_choice in ['libx265', 'LIBX265', 'CPU', 'cpu', '3']:
         ConverterLIBX265(library_path, title, audio_file, video_file)
     
-    elif encoder_choice in ['raw', 'rawfile', 'RAW', 'RAWFILE', '3']:
+    elif encoder_choice in ['raw', 'rawfile', 'RAW', 'RAWFILE', '4']:
         ConverterRaw(library_path, title, audio_file, video_file)
     
     else:
@@ -122,8 +125,8 @@ def GetEncoderOfChoice():
 
     # Prompt user for encoding choice.
     while True:
-        encoder_choice = input(f"{colors.RED}Please choose an encoder: (arranged by filesize from smallest to biggest){colors.ENDC}\n 1. NVENC = GPU\n 2. libx265 = CPU\n 3. rawfile = CPU     ")
-        if encoder_choice in ['NVENC', 'nvenc', 'GPU', 'gpu', '1', 'libx265', 'LIBX265', 'CPU', 'cpu', '2', 'rawfile', 'raw', 'RAW', 'RAWFILE', '3']:
+        encoder_choice = input(f"{colors.RED}Please choose an encoder: (arranged by filesize from smallest to biggest){colors.ENDC}\n 1. NVENC = NVIDIA GPU\n 2. HEVC = AMD GPU\n 3. libx265 = CPU\n 4. rawfile = CPU     ")
+        if encoder_choice in ['NVENC', 'nvenc', 'NVIDIA', 'nvidia', '1', 'HEVC', 'hevc', 'AMD', 'amd', '2', 'libx265', 'LIBX265', 'CPU', 'cpu', '3', 'rawfile', 'raw', 'RAW', 'RAWFILE', '4']:
             return encoder_choice
 
         print(f"{colors.RED}Invalid input. Please choose again.{colors.ENDC}")
@@ -241,6 +244,77 @@ def ConverterNVENC(library_path, title, audio_file, video_file):
         'uhq', '-highbitdepth', '1', '-multipass', 'fullres', '-rc:v', 'vbr', '-b:v', '0', '-cq', '28',
         '-qmin', '15', '-g', '150', '-keyint_min', '15', '-rc-lookahead:v', '20', '-unidir_b', '1',
         '-tf_level', '4', '-preset', 'fast', '-bufsize', '20M', '-crf', '0',
+        '-movflags', 'faststart', '-loglevel', 'info', '-y', str(output_path)
+    ]
+
+    # Get the total duration of the video file
+    total_duration = GetVideoDuration(video_file)
+
+    # Start ffmpeg process
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    # Initialize progress bar & formatting
+    progress_bar = tqdm(total=100, desc="Encoding Progress", ncols=100, unit='%', \
+        bar_format='{desc}: |{bar}|{percentage:3.0f}%', colour='blue', leave=False)
+
+    # Parse stderr for progress information
+    for line in process.stderr:
+        if 'frame=' in line and 'time=' in line:
+
+            try:
+                # Extract time, split it & convert into total seconds
+                time_str = line.split('time=')[1].split(' ')[0]
+                time_parts = time_str.split(':')
+
+                if len(time_parts) == 3:  # Expected format: hh:mm:ss.xx
+                    seconds = int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + float(time_parts[2])
+
+                    # Calculate the progress percentage
+                    progress = (seconds / total_duration) * 100
+
+                    # Round to 2 decimals places
+                    progress = round(progress, 2)
+                    
+                    # Update to progress bar
+                    progress_bar.n = progress
+                    progress_bar.last_print_n = progress
+                    progress_bar.set_postfix_str(f'{progress}%')
+                    progress_bar.update(0)
+            
+            # If error in parsing time print an error message and continue
+            except ValueError:
+                print(f"{colors.RED}Error parsing time: {line}{colors.ENDC}")
+                continue
+
+    # Wait for the ffmpeg process to finish
+    process.wait()
+
+    # Indicate user
+    print(f"\n{colors.GREEN}Video encoding complete. You can find the video here: {output_path}{colors.ENDC}")
+
+    # Clean any left-over files
+    CleanUp(audio_file, video_file)
+
+
+def ConverterHEVC(library_path, title, audio_file, video_file):
+
+    print(f"{colors.GREEN}Encoding video using Hevc...{colors.ENDC}")
+
+    # Sanitizing title to ensure there are no special characters that could cause issuues
+    safe_title = "".join(x for x in title if x.isalnum() or x.isspace()).replace(" ", "_")
+    output_path = Path(library_path) / f"{safe_title}.mp4"
+
+    # Convert path objects to string objects before passing to ffmpeg
+    video_file_str = str(video_file)
+    audio_file_str = str(audio_file)
+
+    # Initialize the ffmpeg command
+    command = [
+        'ffmpeg', '-i', video_file_str, '-i', audio_file_str,
+        '-c:v', 'hevc_amf', '-c:a', 'aac', '-preset', 'quality', '-rc', 'vbr_peak', '-b:v', '4000000',
+        '-maxrate', '16000000', '-bufsize', '16000000', '-vbaq', 'true', '-g', '600',
+        'high_motion_quality_boost_enable', 'true', '-preanalysis', 'true', '-pa_lookahead_buffer_depth', '40',
+        '-pa_taq_mode', '2', '-b:a', '192k',
         '-movflags', 'faststart', '-loglevel', 'info', '-y', str(output_path)
     ]
 
