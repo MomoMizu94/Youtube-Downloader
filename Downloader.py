@@ -1,5 +1,4 @@
-from pytubefix import YouTube
-import ffmpeg
+import yt_dlp
 import os
 import requests
 import subprocess
@@ -7,7 +6,7 @@ from tqdm import tqdm
 from pathlib import Path
 import sys
 import platform
-from pytubefix.cli import on_progress
+
 
 class colors:
 
@@ -30,12 +29,14 @@ def Main():
 
         # Check if the URL is reachable by sending a request
         check_url = requests.get(url, timeout=3)
-        check_url.raise_for_status()  # Raises HTTPError for bad responses
+        # Raise HTTPError for bad responses
+        check_url.raise_for_status()
 
-        # If url if reachable, proceed to load the YouTube video
-        yt = YouTube(url, 'WEB', on_progress_callback=on_progress)
-        title = yt.title
-        print(f"{colors.GREEN}Found a video titled: {title}")
+        # If url is reachable, proceed to load the YouTube video
+        with yt_dlp.YoutubeDL({"quiet": True}) as ytdl:
+            info = ytdl.extract_info(url, download=False)
+            title = info.get("title", "output")
+            print(f"{colors.GREEN}Found a video titled: {title}")
 
     except requests.exceptions.RequestException as e:
 
@@ -52,7 +53,7 @@ def Main():
     # Get platform & necessary paths
     library_path, video_file, audio_file = GetPlatformAndOperatingSystem()
 
-    return Downloader(yt, title, library_path, audio_file, video_file)
+    return Downloader(url, title, library_path, audio_file, video_file)
 
 
 def GetPlatformAndOperatingSystem():
@@ -71,62 +72,68 @@ def GetPlatformAndOperatingSystem():
     return library_path, video_file, audio_file
 
 
-def Downloader(yt, title, library_path, audio_file, video_file):
+def Downloader(url, title, library_path, audio_file, video_file):
 
-    print(f"{colors.GREEN}Video download is starting...{colors.ENDC}")
+    print(f"{colors.GREEN}Initiating download...{colors.ENDC}")
 
-    # Download video & audio streams
-    video_stream = yt.streams.filter(adaptive=True, file_extension='mp4', only_video=True).order_by('bitrate').desc().first()
-    audio_stream = yt.streams.filter(adaptive=True, only_audio=True).order_by('abr').desc().first()
+    try:
 
-    if audio_stream is None:
-        print(f"{colors.RED}No suitable audio stream found, attempting different formats...{colors.ENDC}")
+        # Video download
+        with yt_dlp.YoutubeDL({
+                'format' : 'bv*[ext=mp4]/bv*',  # Fallback to best video if no mp4
+                'outtmpl' : str(video_file),
+                'noplaylist' : True,
+                'quiet': True,
+                'no_warnings' : True,
+                'merge_output_format' : 'never',
+                'postprocessors' : []
+            }) as ytdl:
+            ytdl.download([url])
+            print(f"{colors.GREEN}Video download complete.{colors.ENDC}")
 
-        # Try a different filter, for example, looking for `m4a` or `webm` formats
-        audio_stream = yt.streams.filter(adaptive=True, only_audio=True, file_extension='m4a').first()
+        # Audio download
+        with yt_dlp.YoutubeDL({
+                'format': 'ba[ext=m4a]/ba',     # Fallback to best audio if no m4a
+                'outtmpl': str(audio_file),
+                'noplaylist': True,
+                'quiet': True,
+                'no_warnings' : True,
+                'merge_output_format' : 'never',
+                'postprocessors' : []
+            }) as ytdl:
+            ytdl.download([url])
+            print(f"{colors.GREEN}Audio download complete.{colors.ENDC}")
 
-        if audio_stream is None:
-            audio_stream = yt.streams.filter(adaptive=True, only_audio=True, file_extension='webm').first()
-
-    # If still no audio stream found
-    if audio_stream is None:
-        print(f'{colors.RED}Error: No audio stream found.{colors.ENDC}')
-        return
-
-    # Download video and audio
-    print(f"{colors.GREEN}Downloading video and audio...{colors.ENDC}")
-
-    video_stream.download(output_path=str(library_path), filename="TEMP_video.mp4")
-    audio_stream.download(output_path=str(library_path), filename="TEMP_audio.aac")
-
-    print(f"{colors.GREEN}Download complete.{colors.ENDC}")
+    except Exception as e:
+        print(f"{colors.RED}Download failed: {str(e)}{colors.ENDC}")
+        sys.exit(1)
 
     # Prompt user for encoding choice
     encoder_choice = GetEncoderOfChoice()
 
     if encoder_choice in ['NVENC', 'nvenc', 'NVIDIA', 'nvidia', '1']:
-        ConverterNVENC(library_path, title, audio_file, video_file)
+        ConverterNvenc(library_path, title, audio_file, video_file)
 
-    if encoder_choice in ['HEVC', 'hevc', 'AMD', 'amd', '2']:
-        ConverterHEVC(library_path, title, audio_file, video_file)
+    if encoder_choice in ['VAAPI', 'vaapi', 'AMD', 'amd', '2']:
+        ConverterVaapi(library_path, title, audio_file, video_file)
     
     elif encoder_choice in ['libx265', 'LIBX265', 'CPU', 'cpu', '3']:
-        ConverterLIBX265(library_path, title, audio_file, video_file)
+        ConverterLibx265(library_path, title, audio_file, video_file)
     
     elif encoder_choice in ['raw', 'rawfile', 'RAW', 'RAWFILE', '4']:
         ConverterRaw(library_path, title, audio_file, video_file)
     
     else:
         print(f"{colors.RED}Invalid choice. Please try again.{colors.ENDC}")
-        return Downloader(yt, library_path, title, audio_file, video_file)
+        return Downloader(url, title, library_path, audio_file, video_file)
 
 
 def GetEncoderOfChoice():
 
     # Prompt user for encoding choice.
     while True:
-        encoder_choice = input(f"{colors.RED}Please choose an encoder: (arranged by filesize from smallest to biggest){colors.ENDC}\n 1. NVENC = NVIDIA GPU\n 2. HEVC = AMD GPU\n 3. libx265 = CPU\n 4. rawfile = CPU     ")
-        if encoder_choice in ['NVENC', 'nvenc', 'NVIDIA', 'nvidia', '1', 'HEVC', 'hevc', 'AMD', 'amd', '2', 'libx265', 'LIBX265', 'CPU', 'cpu', '3', 'rawfile', 'raw', 'RAW', 'RAWFILE', '4']:
+        encoder_choice = input(f"{colors.RED}Please choose an encoder:{colors.ENDC}\n 1. Nvenc = Nvidia gpu\n 2. Vaapi = AMD gpu\n 3. Libx265 = cpu\n 4. Rawfile     ")
+        if encoder_choice in ['NVENC', 'nvenc', 'NVIDIA', 'nvidia', '1', 'VAAPI', 'vaapi', 'AMD', 'amd', '2', 'libx265', 'LIBX265', 'CPU', 'cpu', '3', 'rawfile', 'raw', 'RAW', 'RAWFILE', '4']:
             return encoder_choice
 
         print(f"{colors.RED}Invalid input. Please choose again.{colors.ENDC}")
@@ -157,7 +164,7 @@ def GetVideoDuration(video_file):
         raise
 
 
-def ConverterLIBX265(library_path, title, audio_file, video_file):
+def ConverterLibx265(library_path, title, audio_file, video_file):
 
     print(f"{colors.GREEN}Encoding video using libx265...{colors.ENDC}")
 
@@ -171,9 +178,17 @@ def ConverterLIBX265(library_path, title, audio_file, video_file):
 
     # Initialize the ffmpeg command
     command = [
-        'ffmpeg', '-i', video_file_str, '-i', audio_file_str,
-        '-c:v', 'libx265', '-c:a', 'aac', '-threads', '16', '-preset', 'medium',
-        '-crf', '10', '-movflags', 'faststart', '-loglevel', 'info', '-y', str(output_path)
+        'ffmpeg',
+        '-i', video_file_str,
+        '-i', audio_file_str,
+        '-c:v', 'libx265',
+        '-c:a', 'aac',
+        '-threads', '16',
+        '-preset', 'medium',
+        '-crf', '10',
+        '-movflags', 'faststart',
+        '-loglevel', 'info',
+        '-y', str(output_path)
     ]
 
     # Get the total duration of the video file
@@ -218,14 +233,17 @@ def ConverterLIBX265(library_path, title, audio_file, video_file):
     # Wait for the ffmpeg process to finish
     process.wait()
 
-    # Indicate user
-    print(f"\n{colors.GREEN}Video encoding complete. You can find the video here: {output_path}{colors.ENDC}")
+    stdout, stderr = process.communicate()
+    if process.returncode != 0:
+        print(f"{colors.RED}FFmpeg error:{colors.ENDC}\n{stderr}")
+    else:
+        print(f"\n{colors.GREEN}Video encoding complete. You can find the video here: {output_path}{colors.ENDC}")
 
     # Clean any left-over files
     CleanUp(audio_file, video_file)
 
 
-def ConverterNVENC(library_path, title, audio_file, video_file):
+def ConverterNvenc(library_path, title, audio_file, video_file):
 
     print(f"{colors.GREEN}Encoding video using Nvenc...{colors.ENDC}")
 
@@ -239,12 +257,32 @@ def ConverterNVENC(library_path, title, audio_file, video_file):
 
     # Initialize the ffmpeg command
     command = [
-        'ffmpeg', '-i', video_file_str, '-i', audio_file_str,
-        '-c:v', 'hevc_nvenc', '-c:a', 'aac', '-profile:v', 'main10', '-preset:v', 'p7', '-tune:v',
-        'uhq', '-highbitdepth', '1', '-multipass', 'fullres', '-rc:v', 'vbr', '-b:v', '0', '-cq', '28',
-        '-qmin', '15', '-g', '150', '-keyint_min', '15', '-rc-lookahead:v', '20', '-unidir_b', '1',
-        '-tf_level', '4', '-preset', 'fast', '-bufsize', '20M', '-crf', '0',
-        '-movflags', 'faststart', '-loglevel', 'info', '-y', str(output_path)
+        'ffmpeg',
+        '-i', video_file_str,
+        '-i', audio_file_str,
+        '-c:v', 'hevc_nvenc',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-profile:v', 'main10',
+        '-preset:v', 'p7',
+        '-tune:v', 'uhq',
+        '-highbitdepth', '1',
+        '-multipass', 'fullres',
+        '-rc:v', 'vbr',
+        '-b:v', '0',
+        '-cq', '28',
+        '-qmin', '15',
+        '-g', '150',
+        '-keyint_min', '15',
+        '-rc-lookahead:v', '20',
+        '-unidir_b', '1',
+        '-tf_level', '4',
+        '-preset', 'fast',
+        '-bufsize', '20M',
+        '-crf', '0',
+        '-movflags', 'faststart',
+        '-loglevel', 'info',
+        '-y', str(output_path)
     ]
 
     # Get the total duration of the video file
@@ -289,16 +327,19 @@ def ConverterNVENC(library_path, title, audio_file, video_file):
     # Wait for the ffmpeg process to finish
     process.wait()
 
-    # Indicate user
-    print(f"\n{colors.GREEN}Video encoding complete. You can find the video here: {output_path}{colors.ENDC}")
+    stdout, stderr = process.communicate()
+    if process.returncode != 0:
+        print(f"{colors.RED}FFmpeg error:{colors.ENDC}\n{stderr}")
+    else:
+        print(f"\n{colors.GREEN}Video encoding complete. You can find the video here: {output_path}{colors.ENDC}")
 
     # Clean any left-over files
     CleanUp(audio_file, video_file)
 
 
-def ConverterHEVC(library_path, title, audio_file, video_file):
+def ConverterVaapi(library_path, title, audio_file, video_file):
 
-    print(f"{colors.GREEN}Encoding video using Hevc...{colors.ENDC}")
+    print(f"{colors.GREEN}Encoding video using Vaapi...{colors.ENDC}")
 
     # Sanitizing title to ensure there are no special characters that could cause issuues
     safe_title = "".join(x for x in title if x.isalnum() or x.isspace()).replace(" ", "_")
@@ -308,14 +349,24 @@ def ConverterHEVC(library_path, title, audio_file, video_file):
     video_file_str = str(video_file)
     audio_file_str = str(audio_file)
 
-    # Initialize the ffmpeg command
+    # Ffmpeg command
     command = [
-        'ffmpeg', '-i', video_file_str, '-i', audio_file_str,
-        '-c:v', 'hevc_amf', '-c:a', 'aac', '-preset', 'quality', '-rc', 'vbr_peak', '-b:v', '4000000',
-        '-maxrate', '16000000', '-bufsize', '16000000', '-vbaq', 'true', '-g', '600',
-        'high_motion_quality_boost_enable', 'true', '-preanalysis', 'true', '-pa_lookahead_buffer_depth', '40',
-        '-pa_taq_mode', '2', '-b:a', '192k',
-        '-movflags', 'faststart', '-loglevel', 'info', '-y', str(output_path)
+        'ffmpeg',
+        '-vaapi_device', '/dev/dri/renderD128',
+        '-i', video_file_str,
+        '-i', audio_file_str,
+        '-vf', 'format=nv12,hwupload',
+        '-c:v', 'hevc_vaapi',
+        '-profile:v', 'main',
+        '-global_quality', '20',
+        '-g', '150',
+        '-keyint_min', '15',
+        '-bf', '2',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-movflags', 'faststart',
+        '-loglevel', 'info',
+        '-y', str(output_path)
     ]
 
     # Get the total duration of the video file
@@ -360,8 +411,11 @@ def ConverterHEVC(library_path, title, audio_file, video_file):
     # Wait for the ffmpeg process to finish
     process.wait()
 
-    # Indicate user
-    print(f"\n{colors.GREEN}Video encoding complete. You can find the video here: {output_path}{colors.ENDC}")
+    stdout, stderr = process.communicate()
+    if process.returncode != 0:
+        print(f"{colors.RED}FFmpeg error:{colors.ENDC}\n{stderr}")
+    else:
+        print(f"\n{colors.GREEN}Video encoding complete. You can find the video here: {output_path}{colors.ENDC}")
 
     # Clean any left-over files
     CleanUp(audio_file, video_file)
@@ -381,9 +435,17 @@ def ConverterRaw(library_path, title, audio_file, video_file):
 
     # Initialize the ffmpeg command
     command = [
-        'ffmpeg', '-i', video_file_str, '-i', audio_file_str,
-        '-c:v', 'png', '-c:a', 'aac', '-threads', '16', '-preset', 'veryslow',
-        '-crf', '0', '-movflags', 'faststart', '-loglevel', 'info', '-y', str(output_path)
+        'ffmpeg',
+        '-i', video_file_str,
+        '-i', audio_file_str,
+        '-c:v', 'png',
+        '-c:a', 'aac',
+        '-threads', '16',
+        '-preset', 'veryslow',
+        '-crf', '0',
+        '-movflags', 'faststart',
+        '-loglevel', 'info',
+        '-y', str(output_path)
     ]
 
     # Get the total duration of the video file
@@ -428,8 +490,11 @@ def ConverterRaw(library_path, title, audio_file, video_file):
     # Wait for the ffmpeg process to finish
     process.wait()
 
-    # Indicate user
-    print(f"\n{colors.GREEN}Video encoding complete. You can find the video here: {output_path}{colors.ENDC}")
+    stdout, stderr = process.communicate()
+    if process.returncode != 0:
+        print(f"{colors.RED}FFmpeg error:{colors.ENDC}\n{stderr}")
+    else:
+        print(f"\n{colors.GREEN}Video encoding complete. You can find the video here: {output_path}{colors.ENDC}")
 
     # Clean any left-over files
     CleanUp(audio_file, video_file)
@@ -446,4 +511,3 @@ def CleanUp(video_file, audio_file):
 if __name__ == '__main__':
 
     Main()
-
