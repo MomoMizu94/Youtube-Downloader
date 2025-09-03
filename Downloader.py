@@ -245,7 +245,7 @@ def GetVideoDuration(video_file):
         print(f"{colors.RED}Error: Could not convert the duration to float: {duration_str}{colors.ENDC}")
         raise
 
-### FIX FILTER ISSUE WITH CPU CONVERTERS ###
+
 def ConverterLibx265(library_path, title, audio_file, video_file, sponsors):
 
     print(f"{colors.GREEN}Encoding video using libx265...{colors.ENDC}")
@@ -266,12 +266,6 @@ def ConverterLibx265(library_path, title, audio_file, video_file, sponsors):
     if sponsors:
         print(f"{colors.BLUE}Debug — first segment: {sponsors[0]['segment']}{colors.ENDC}")
 
-
-    if vf_core:
-        video_filter = f"{vf_core},format=nv12,hwupload"
-    else:
-        video_filter = "format=nv12,hwupload"
-
     if af_core:
         audio_filter = f"{af_core},loudnorm=I=-16:TP=-1.5:LRA=11"
     else:
@@ -286,13 +280,11 @@ def ConverterLibx265(library_path, title, audio_file, video_file, sponsors):
     else:
         print(f"{colors.YELLOW}No SponsorBlock segments found; encoding full video.{colors.ENDC}")
 
-    print("FFMPEG ALOTETAAN")
     # Initialize the ffmpeg command
     command = [
         'ffmpeg',
         '-i', video_file_str,
         '-i', audio_file_str,
-        '-vf', video_filter,
         '-c:v', 'libx265',
         '-af', audio_filter,
         '-c:a', 'aac',
@@ -303,6 +295,11 @@ def ConverterLibx265(library_path, title, audio_file, video_file, sponsors):
         '-loglevel', 'info',
         '-y', str(output_path)
     ]
+
+    if vf_core:
+        # Insert video filter if it exists
+        index_cv = command.index('-c:v')
+        command[index_cv:index_cv] = ['-vf', vf_core]
 
     # Get the total duration of the video file
     total_duration = GetVideoDuration(video_file)
@@ -375,7 +372,6 @@ def ConverterNvenc(library_path, title, audio_file, video_file, sponsors):
     print(f"{colors.BLUE}Debug — sponsors passed in: {len(sponsors)}{colors.ENDC}")
     if sponsors:
         print(f"{colors.BLUE}Debug — first segment: {sponsors[0]['segment']}{colors.ENDC}")
-
 
     if vf_core:
         video_filter = f"{vf_core},format=nv12,hwupload"
@@ -500,7 +496,6 @@ def ConverterVaapi(library_path, title, audio_file, video_file, sponsors):
     if sponsors:
         print(f"{colors.BLUE}Debug — first segment: {sponsors[0]['segment']}{colors.ENDC}")
 
-
     if vf_core:
         video_filter = f"{vf_core},format=nv12,hwupload"
     else:
@@ -613,12 +608,6 @@ def ConverterRaw(library_path, title, audio_file, video_file, sponsors):
     if sponsors:
         print(f"{colors.BLUE}Debug — first segment: {sponsors[0]['segment']}{colors.ENDC}")
 
-
-    if vf_core:
-        video_filter = f"{vf_core},format=nv12,hwupload"
-    else:
-        video_filter = "format=nv12,hwupload"
-
     if af_core:
         audio_filter = f"{af_core},loudnorm=I=-16:TP=-1.5:LRA=11"
     else:
@@ -638,7 +627,6 @@ def ConverterRaw(library_path, title, audio_file, video_file, sponsors):
         'ffmpeg',
         '-i', video_file_str,
         '-i', audio_file_str,
-        '-vf', video_filter,
         '-c:v', 'png',
         '-af', audio_filter,
         '-c:a', 'aac',
@@ -648,6 +636,11 @@ def ConverterRaw(library_path, title, audio_file, video_file, sponsors):
         '-loglevel', 'info',
         '-y', str(output_path)
     ]
+
+    if vf_core:
+        # Insert video filter if it exists
+        index_cv = command.index('-c:v')
+        command[index_cv:index_cv] = ['-vf', vf_core]
 
     # Get the total duration of the video file
     total_duration = GetVideoDuration(video_file)
