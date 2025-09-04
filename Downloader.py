@@ -66,7 +66,8 @@ def Main():
     # Get platform & necessary paths
     library_path, video_file, audio_file = GetPlatformAndOperatingSystem()
 
-    return Downloader(url, title, library_path, audio_file, video_file, sponsors)
+    mode = GetModeOfChoice()
+    return Downloader(url, title, library_path, audio_file, video_file, sponsors, mode)
 
 
 def GetPlatformAndOperatingSystem():
@@ -80,46 +81,78 @@ def GetPlatformAndOperatingSystem():
 
     # Creates necessary paths for temp files
     video_file = Path(library_path) / "TEMP_video.mp4"
-    audio_file = Path(library_path) / "TEMP_audio.aac"
+    audio_file = Path(library_path) / "TEMP_audio.flac"
 
     return library_path, video_file, audio_file
 
 
-def Downloader(url, title, library_path, audio_file, video_file, sponsors):
+def GetModeOfChoice():
+
+    while True:
+        mode = input(f"{colors.RED}Choose whether you'd like to download a full video or only audio:{colors.ENDC}\n 1. Full video file\n 2. Audio only file     ")
+        if mode in ['1', 'video', 'VIDEO', '2', 'audio', 'AUDIO']:
+            if mode in ['2', 'audio', 'AUDIO']:
+                return 'audio'
+            else:
+                return 'video'
+
+    print(f"{colors.RED}Invalid input. Please type 1 for full video and 2 for audio only.{colors.ENDC}")
+
+
+def Downloader(url, title, library_path, audio_file, video_file, sponsors, mode):
 
     print(f"{colors.GREEN}Initiating download...{colors.ENDC}")
 
     try:
+        # Video & audio downloads
+        if mode == 'video':
+            with yt_dlp.YoutubeDL({
+                    'format' : 'bv*[ext=mp4]/bv*',  # Fallback to best video if no mp4
+                    'outtmpl' : str(video_file),
+                    'noplaylist' : True,
+                    'quiet': True,
+                    'no_warnings' : True,
+                    'merge_output_format' : 'never',
+                    'postprocessors' : [],
+                }) as ytdl:
+                ytdl.download([url])
+                print(f"{colors.GREEN}Video download complete.{colors.ENDC}")
 
-        # Video download
-        with yt_dlp.YoutubeDL({
-                'format' : 'bv*[ext=mp4]/bv*',  # Fallback to best video if no mp4
-                'outtmpl' : str(video_file),
-                'noplaylist' : True,
-                'quiet': True,
-                'no_warnings' : True,
-                'merge_output_format' : 'never',
-                'postprocessors' : [],
-            }) as ytdl:
-            ytdl.download([url])
-            print(f"{colors.GREEN}Video download complete.{colors.ENDC}")
-
-        # Audio download
-        with yt_dlp.YoutubeDL({
-                'format': 'ba[ext=m4a]/ba',     # Fallback to best audio if no m4a
-                'outtmpl': str(audio_file),
-                'noplaylist': True,
-                'quiet': True,
-                'no_warnings' : True,
-                'merge_output_format' : 'never',
-                'postprocessors' : [],
-            }) as ytdl:
-            ytdl.download([url])
-            print(f"{colors.GREEN}Audio download complete.{colors.ENDC}")
+            with yt_dlp.YoutubeDL({
+                    'format': 'ba[ext=m4a]/ba',     # Fallback to best audio if no m4a
+                    'outtmpl': str(audio_file),
+                    'noplaylist': True,
+                    'quiet': True,
+                    'no_warnings' : True,
+                    'merge_output_format' : 'never',
+                    'postprocessors' : [],
+                }) as ytdl:
+                ytdl.download([url])
+                print(f"{colors.GREEN}Audio download complete.{colors.ENDC}")
+        
+        # Audio only download
+        else:
+            with yt_dlp.YoutubeDL({
+                    'format': 'bestaudio/best',
+                    'outtmpl': str(audio_file),
+                    'noplaylist': True,
+                    'quiet': True,
+                    'no_warnings' : True,
+                    'merge_output_format' : 'never',
+                    'postprocessors' : [],
+                }) as ytdl:
+                ytdl.download([url])
+                print(f"{colors.GREEN}Audio-only download complete.{colors.ENDC}")
 
     except Exception as e:
         print(f"{colors.RED}Download failed: {str(e)}{colors.ENDC}")
         sys.exit(1)
+
+    # Check whether user wanted to download only audio
+    if mode == 'audio':
+        return ConverterAudioOnly(library_path, title, audio_file, sponsors)
+    else:
+        return
 
     # Prompt user for encoding choice
     encoder_choice = GetEncoderOfChoice()
@@ -150,6 +183,31 @@ def GetEncoderOfChoice():
             return encoder_choice
 
         print(f"{colors.RED}Invalid input. Please choose again.{colors.ENDC}")
+
+
+def GetAudioFormatOfChoice():
+    # Asks the user their preferred audio format
+    prompt = (
+        f"{colors.RED}Choose audio format:{colors.ENDC}\n"
+        "  1) AAC (.m4a) - best compatibility\n"
+        "  2) MP3 (.mp3) - universal\n"
+        "  3) FLAC (.flac) - lossless, large files\n"
+        "Your choice: "
+    )
+
+    formats = {
+        "1": ("aac", "m4a"),
+        "2": ("libmp3lame", "mp3"),
+        "3": ("flac", "flac"),
+    }
+
+    while True:
+        choice = input(prompt).strip().lower()
+        print(choice)
+        if choice in formats:
+            return formats[choice]
+        
+        print(f"{colors.RED}Invalid input. Please type 1 - 3 to choose between audio formats.{colors.ENDC}")
 
 
 def BuildSponsorSegments(sponsors):
@@ -287,7 +345,7 @@ def ConverterLibx265(library_path, title, audio_file, video_file, sponsors):
         '-i', audio_file_str,
         '-c:v', 'libx265',
         '-af', audio_filter,
-        '-c:a', 'aac',
+        '-c:a', 'flac',
         '-b:a', '192k',
         '-preset', 'medium',
         '-crf', '10',
@@ -400,7 +458,7 @@ def ConverterNvenc(library_path, title, audio_file, video_file, sponsors):
         '-vf', video_filter,
         '-c:v', 'hevc_nvenc',
         '-af', audio_filter,
-        '-c:a', 'aac',
+        '-c:a', 'flac',
         '-b:a', '192k',
         '-profile:v', 'main10',
         '-preset:v', 'p7',
@@ -529,7 +587,7 @@ def ConverterVaapi(library_path, title, audio_file, video_file, sponsors):
         '-keyint_min', '15',
         '-bf', '2',
         '-af', audio_filter,
-        '-c:a', 'aac',
+        '-c:a', 'flac',
         '-b:a', '192k',
         '-movflags', 'faststart',
         '-loglevel', 'info',
@@ -629,7 +687,7 @@ def ConverterRaw(library_path, title, audio_file, video_file, sponsors):
         '-i', audio_file_str,
         '-c:v', 'png',
         '-af', audio_filter,
-        '-c:a', 'aac',
+        '-c:a', 'flac',
         '-preset', 'veryslow',
         '-crf', '0',
         '-movflags', 'faststart',
@@ -694,11 +752,116 @@ def ConverterRaw(library_path, title, audio_file, video_file, sponsors):
     CleanUp(video_file, audio_file)
 
 
-def CleanUp(video_file, audio_file):
+def ConverterAudioOnly(library_path, title, audio_file, sponsors):
 
-    # Remove temporary files after encoding
-    os.remove(audio_file)
-    os.remove(video_file)
+    print("Creating a audio-only file...")
+
+    # Sanitizing title to ensure there are no special characters that could cause issues
+    safe_title = "".join(x for x in title if x.isalnum() or x.isspace()).replace(" ", "_")
+    codec, extension = GetAudioFormatOfChoice()
+    output_path = Path(library_path) / f"{safe_title}.{extension}"
+
+    # Convert path objects to string objects before passing to ffmpeg
+    audio_file_str = str(audio_file)
+
+    # Build sponsor filters
+    _, af_core = BuildSponsorSegments(sponsors)
+
+    # For debugging
+    print(f"{colors.BLUE}Debug — sponsors passed in: {len(sponsors)}{colors.ENDC}")
+    if sponsors:
+        print(f"{colors.BLUE}Debug — first segment: {sponsors[0]['segment']}{colors.ENDC}")
+
+    if af_core:
+        audio_filter = f"{af_core},loudnorm=I=-16:TP=-1.5:LRA=11"
+    else:
+        audio_filter = "loudnorm=I=-16:TP=-1.5:LRA=11"
+
+    if sponsors:
+        print(f"{colors.CYAN}Applying SponsorSkip to {len(sponsors)} segment(s):{colors.ENDC}")
+        for sp in sponsors:
+            s, e = sp["segment"]
+            cat = sp.get("category", "unknown")
+            print(f"  - {cat}: {s:.2f}s → {e:.2f}s")
+    else:
+        print(f"{colors.YELLOW}No SponsorBlock segments found; encoding full video.{colors.ENDC}")
+
+    # Initialize the ffmpeg command
+    command = [
+        'ffmpeg',
+        '-i', audio_file_str,
+        '-vn',
+        '-af', audio_filter,
+        '-c:a', codec,
+    ]
+
+    # Bitrate for lossy codecs, skip for flac
+    if codec.lower() != 'flac':
+        command += ['-b:a', '192k']
+    command += [
+        '-movflags', 'faststart',
+        '-loglevel', 'info',
+        '-y', str(output_path)
+    ]
+
+    # Get the total duration of the audio file
+    total_duration = GetVideoDuration(audio_file)
+
+    # Start ffmpeg process
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+    # Initialize progress bar & formatting
+    progress_bar = tqdm(total=100, desc="Encoding Progress", ncols=100, unit='%', \
+        bar_format='{desc}: |{bar}|{percentage:3.0f}%', colour='blue', leave=False)
+
+    # Parse stderr for progress information
+    for line in process.stderr:
+        if 'time=' in line:
+
+            try:
+                # Extract time, split it & convert into total seconds
+                time_str = line.split('time=')[1].split(' ')[0]
+                time_parts = time_str.split(':')
+
+                if len(time_parts) == 3:  # Expected format: hh:mm:ss.xx
+                    seconds = int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + float(time_parts[2])
+
+                    # Calculate the progress percentage
+                    progress = (seconds / total_duration) * 100
+
+                    # Round to 2 decimals places
+                    progress = round(progress, 2)
+                    
+                    # Update to progress bar
+                    progress_bar.n = progress
+                    progress_bar.last_print_n = progress
+                    progress_bar.set_postfix_str(f'{progress}%')
+                    progress_bar.update(0)
+            
+            # If error in parsing time print an error message and continue
+            except ValueError:
+                print(f"{colors.RED}Error parsing time: {line}{colors.ENDC}")
+                continue
+
+    # Wait for the ffmpeg process to finish
+    process.wait()
+
+    stdout, stderr = process.communicate()
+    if process.returncode != 0:
+        print(f"{colors.RED}FFmpeg error:{colors.ENDC}\n{stderr}")
+    else:
+        print(f"\n{colors.GREEN}Audio file ready. You can find it from here: {output_path}{colors.ENDC}")
+
+    # Clean any left-over files
+    CleanUp(audio_file=audio_file)
+
+
+def CleanUp(video_file=None, audio_file=None):
+
+    for files in [video_file, audio_file]:
+        if files and os.path.exists(files):
+            os.remove(files)
+
     print("Cleaned up temporary files.")
 
 
