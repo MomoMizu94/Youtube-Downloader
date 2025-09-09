@@ -152,26 +152,24 @@ def Downloader(url, title, library_path, audio_file, video_file, sponsors, mode)
     if mode == 'audio':
         return ConverterAudioOnly(library_path, title, audio_file, sponsors)
     else:
-        return
+        # Prompt user for encoding choice
+        encoder_choice = GetEncoderOfChoice()
 
-    # Prompt user for encoding choice
-    encoder_choice = GetEncoderOfChoice()
+        if encoder_choice in ['NVENC', 'nvenc', 'NVIDIA', 'nvidia', '1']:
+            ConverterNvenc(library_path, title, audio_file, video_file, sponsors)
 
-    if encoder_choice in ['NVENC', 'nvenc', 'NVIDIA', 'nvidia', '1']:
-        ConverterNvenc(library_path, title, audio_file, video_file, sponsors)
-
-    if encoder_choice in ['VAAPI', 'vaapi', 'AMD', 'amd', '2']:
-        ConverterVaapi(library_path, title, audio_file, video_file, sponsors)
-    
-    elif encoder_choice in ['libx265', 'LIBX265', 'CPU', 'cpu', '3']:
-        ConverterLibx265(library_path, title, audio_file, video_file, sponsors)
-    
-    elif encoder_choice in ['raw', 'rawfile', 'RAW', 'RAWFILE', '4']:
-        ConverterRaw(library_path, title, audio_file, video_file, sponsors)
-    
-    else:
-        print(f"{colors.RED}Invalid choice. Please try again.{colors.ENDC}")
-        return Downloader(url, title, library_path, audio_file, video_file, sponsors)
+        if encoder_choice in ['VAAPI', 'vaapi', 'AMD', 'amd', '2']:
+            ConverterVaapi(library_path, title, audio_file, video_file, sponsors)
+        
+        elif encoder_choice in ['libx265', 'LIBX265', 'CPU', 'cpu', '3']:
+            ConverterLibx265(library_path, title, audio_file, video_file, sponsors)
+        
+        elif encoder_choice in ['raw', 'rawfile', 'RAW', 'RAWFILE', '4']:
+            ConverterRaw(library_path, title, audio_file, video_file, sponsors)
+        
+        else:
+            print(f"{colors.RED}Invalid choice. Please try again.{colors.ENDC}")
+            return Downloader(url, title, library_path, audio_file, video_file, sponsors)
 
 
 def GetEncoderOfChoice():
