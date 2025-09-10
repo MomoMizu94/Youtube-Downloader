@@ -22,55 +22,108 @@ class colors:
 
 
 def Main():
-
-    # Asking user input for a url
-    url = input(f"{colors.RED}Type in the url of which video you'd like to download: {colors.ENDC}")
     
-    try:
+    # Initial prompt
+    batch_option = input(f"{colors.RED}This is a YouTube video downloader. Choose what you'd like to do. Please type in either 1 or 2:{colors.ENDC}"
+    "\n 1. Download a single YouTube video from an url"
+    "\n 2. Download multiple YouTube videos from a text file     ").strip()
 
-        # Check if the URL is reachable by sending a request
-        check_url = requests.get(url, timeout=3)
-        # Raise HTTPError for bad responses
-        check_url.raise_for_status()
+    if batch_option == "1":
 
-        # If url is reachable, proceed to load the YouTube video
-        with yt_dlp.YoutubeDL({"quiet": True}) as ytdl:
-            info = ytdl.extract_info(url, download=False)
-            title = info.get("title", "output")
-            video_id = info.get("id")
-            print(f"{colors.GREEN}Found a video titled: {title}")
+        # Asking user input for a url
+        url = input(f"{colors.RED}Type in the url of which video you'd like to download: {colors.ENDC}")
+        
+        try:
+            # Either video or audio-only
+            mode = GetModeOfChoice()
 
-        # Fetch SponsorBlock segments via SponsorBlock API
-        sponsors = []
-        if video_id:
-            sponsors = FetchSponsorSegments(video_id)
-            if sponsors:
-                print(f"{colors.CYAN}Fetched {len(sponsors)} SponsorBlock segment(s).{colors.ENDC}")
+            if mode == "video":
+                encoder_choice = GetEncoderOfChoice()
+                ProcessOne(url, mode='video', encoder_choice=encoder_choice)
             else:
-                print(f"{colors.YELLOW}No SponsorBlock segments found (API returned none).{colors.ENDC}")
+                # Audio only
+                ProcessOne(url, mode='audio')
+
+        except Exception as e:
+            print(f"{colors.RED}Error: {e}{colors.ENDC}")
+            sys.exit(1)
+
+        return
+
+    elif batch_option == "2":
+
+        file_path = input(f"{colors.RED}Please type in the exact file path for the text file that you're using to store video urls you wish to download. {colors.ENDC}"
+        f"{colors.RED}\nPlease make sure that the urls in the text file are stored on separate lines.{colors.ENDC}   ").strip()
+        
+        urls = LoadUrlsFromFile(str(file_path))
+
+        if not urls:
+            print(f"{colors.YELLOW}No URLs found in that file.{colors.ENDC}")
+            return
+        
+        # Ask for the mode (only once)
+        mode = GetModeOfChoice()
+
+        encoder_choice = None
+        audio_format = None
+
+        if mode == 'video':
+            encoder_choice = GetEncoderOfChoice()
         else:
-            print(f"{colors.YELLOW}No video ID; cannot query SponsorBlock.{colors.ENDC}") #######
+            audio_format = GetAudioFormatOfChoice()
 
-    except requests.exceptions.RequestException as e:
+        print(f"{colors.GREEN}Found {len(urls)} URL(s). Starting batch...{colors.ENDC}")
+        successes, failures = 0, 0
 
-        # Handles url related errors
-        print(f"{colors.RED}Video URL was not found or is unreachable. Make sure you have a valid URL.{colors.ENDC}")
-        sys.exit(1)
+        for i, url in enumerate(urls, 1):
+            print(f"{colors.BLUE}[{i}/{len(urls)}]{colors.ENDC} {url}")
+            try:
+                ProcessOne(url, mode, encoder_choice=encoder_choice, audio_format=audio_format)
+                successes += 1
+            except Exception as e:
+                failures += 1
+                print(f"{colors.RED}Failed: {e}{colors.ENDC}")
+                # continue with next URL
 
-    except Exception as e:
+        print(f"{colors.GREEN}Done. Success: {successes}, Failed: {failures}.{colors.ENDC}")
+        return
 
-        # Handle possible errors when creating the YouTube object
-        print(f"{colors.RED}An error occurred while fetching the video: {str(e)}{colors.ENDC}")
-        sys.exit(1)
+    else:
+        print(f"{colors.RED}Invalid choice. Please choose 1 or 2.{colors.ENDC}")
+
+
+def ProcessOne(url, mode, encoder_choice=None, audio_format=None):
+    # Check if the URL is reachable by sending a request
+    check_url = requests.get(url, timeout=3)
+    # Raise HTTPError for bad responses
+    check_url.raise_for_status()
+
+    # If url is reachable, proceed to load the YouTube video
+    with yt_dlp.YoutubeDL({"quiet": True}) as ytdl:
+        info = ytdl.extract_info(url, download=False)
+        title = info.get("title", "output")
+        video_id = info.get("id")
+        print(f"{colors.GREEN}Found a video titled: {title}")
+
+    # Fetch SponsorBlock segments via SponsorBlock API
+    sponsors = []
+    if video_id:
+        sponsors = FetchSponsorSegments(video_id)
+        if sponsors:
+            print(f"{colors.CYAN}Fetched {len(sponsors)} SponsorBlock segment(s).{colors.ENDC}")
+        else:
+            print(f"{colors.YELLOW}No SponsorBlock segments found (API returned none).{colors.ENDC}")
+    else:
+        print(f"{colors.YELLOW}No video ID; cannot query SponsorBlock.{colors.ENDC}") #######
 
     # Get platform & necessary paths
-    library_path, video_file, audio_file = GetPlatformAndOperatingSystem()
+    library_path, video_file, audio_file = GetPlatformAndOperatingSystem(video_id)
 
-    mode = GetModeOfChoice()
-    return Downloader(url, title, library_path, audio_file, video_file, sponsors, mode)
+    # Download + encode
+    return Downloader(url, title, library_path, audio_file, video_file, sponsors, mode, encoder_choice=encoder_choice, audio_format=audio_format)
 
 
-def GetPlatformAndOperatingSystem():
+def GetPlatformAndOperatingSystem(video_id):
 
     # For checking the platform and login name
     ### Windows pathing has not been tested ###
@@ -78,10 +131,16 @@ def GetPlatformAndOperatingSystem():
         library_path = os.path.join('C:', 'users', os.getlogin(), 'Videos')
     elif platform.system() == 'Linux':
         library_path = os.path.join('/', 'home', os.getlogin(), 'Videos')
+    else:
+        library_path = str(Path.home() / "Videos")
 
     # Creates necessary paths for temp files
-    video_file = Path(library_path) / "TEMP_video.mp4"
-    audio_file = Path(library_path) / "TEMP_audio.flac"
+    if video_id:
+        video_file = Path(library_path) / f"TEMP_video_{video_id}.mp4"
+        audio_file = Path(library_path) / f"TEMP_audio_{video_id}.m4a"
+    else:
+        video_file = Path(library_path) / "TEMP_video.mp4"
+        audio_file = Path(library_path) / "TEMP_audio.m4a"
 
     return library_path, video_file, audio_file
 
@@ -99,7 +158,7 @@ def GetModeOfChoice():
     print(f"{colors.RED}Invalid input. Please type 1 for full video and 2 for audio only.{colors.ENDC}")
 
 
-def Downloader(url, title, library_path, audio_file, video_file, sponsors, mode):
+def Downloader(url, title, library_path, audio_file, video_file, sponsors, mode, encoder_choice=None, audio_format=None):
 
     print(f"{colors.GREEN}Initiating download...{colors.ENDC}")
 
@@ -150,15 +209,16 @@ def Downloader(url, title, library_path, audio_file, video_file, sponsors, mode)
 
     # Check whether user wanted to download only audio
     if mode == 'audio':
-        return ConverterAudioOnly(library_path, title, audio_file, sponsors)
+        return ConverterAudioOnly(library_path, title, audio_file, sponsors, audio_format)
     else:
-        # Prompt user for encoding choice
-        encoder_choice = GetEncoderOfChoice()
+        # Only prompt if encoder_choice is None
+        if encoder_choice is None:
+            encoder_choice = GetEncoderOfChoice()
 
         if encoder_choice in ['NVENC', 'nvenc', 'NVIDIA', 'nvidia', '1']:
             ConverterNvenc(library_path, title, audio_file, video_file, sponsors)
 
-        if encoder_choice in ['VAAPI', 'vaapi', 'AMD', 'amd', '2']:
+        elif encoder_choice in ['VAAPI', 'vaapi', 'AMD', 'amd', '2']:
             ConverterVaapi(library_path, title, audio_file, video_file, sponsors)
         
         elif encoder_choice in ['libx265', 'LIBX265', 'CPU', 'cpu', '3']:
@@ -302,6 +362,31 @@ def GetVideoDuration(video_file):
         raise
 
 
+def LoadUrlsFromFile(file_path):
+
+    # Function to load a text from a file and curate a list of urls to download from
+    urls = []
+
+    with open(file_path, "r", encoding="utf-8") as url_list:
+        for line in url_list:
+            # Store cleaned lines in s
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            
+            urls.append(s)
+
+    # Remove duplicates
+    already_seen = set()
+    final_list = []
+    
+    for u in urls:
+        if u not in already_seen:
+            already_seen.add(u)
+            final_list.append(u)
+    return final_list
+
+
 def ConverterLibx265(library_path, title, audio_file, video_file, sponsors):
 
     print(f"{colors.GREEN}Encoding video using libx265...{colors.ENDC}")
@@ -343,7 +428,7 @@ def ConverterLibx265(library_path, title, audio_file, video_file, sponsors):
         '-i', audio_file_str,
         '-c:v', 'libx265',
         '-af', audio_filter,
-        '-c:a', 'flac',
+        '-c:a', 'aac',
         '-b:a', '192k',
         '-preset', 'medium',
         '-crf', '10',
@@ -456,7 +541,7 @@ def ConverterNvenc(library_path, title, audio_file, video_file, sponsors):
         '-vf', video_filter,
         '-c:v', 'hevc_nvenc',
         '-af', audio_filter,
-        '-c:a', 'flac',
+        '-c:a', 'aac',
         '-b:a', '192k',
         '-profile:v', 'main10',
         '-preset:v', 'p7',
@@ -585,7 +670,7 @@ def ConverterVaapi(library_path, title, audio_file, video_file, sponsors):
         '-keyint_min', '15',
         '-bf', '2',
         '-af', audio_filter,
-        '-c:a', 'flac',
+        '-c:a', 'aac',
         '-b:a', '192k',
         '-movflags', 'faststart',
         '-loglevel', 'info',
@@ -685,7 +770,8 @@ def ConverterRaw(library_path, title, audio_file, video_file, sponsors):
         '-i', audio_file_str,
         '-c:v', 'png',
         '-af', audio_filter,
-        '-c:a', 'flac',
+        '-c:a', 'aac',
+        '-b:a', '192k',
         '-preset', 'veryslow',
         '-crf', '0',
         '-movflags', 'faststart',
@@ -750,13 +836,18 @@ def ConverterRaw(library_path, title, audio_file, video_file, sponsors):
     CleanUp(video_file, audio_file)
 
 
-def ConverterAudioOnly(library_path, title, audio_file, sponsors):
+def ConverterAudioOnly(library_path, title, audio_file, sponsors, audio_format=None):
 
     print("Creating a audio-only file...")
 
     # Sanitizing title to ensure there are no special characters that could cause issues
     safe_title = "".join(x for x in title if x.isalnum() or x.isspace()).replace(" ", "_")
-    codec, extension = GetAudioFormatOfChoice()
+
+    if audio_format is None:
+        codec, extension = GetAudioFormatOfChoice()
+    else:
+        codec, extension = audio_format
+
     output_path = Path(library_path) / f"{safe_title}.{extension}"
 
     # Convert path objects to string objects before passing to ffmpeg
