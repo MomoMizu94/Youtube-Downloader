@@ -2,7 +2,7 @@ import yt_dlp
 import os
 import requests
 import subprocess
-import tqdm
+from tqdm import tqdm
 from pathlib import Path
 import sys
 import platform
