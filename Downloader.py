@@ -540,6 +540,28 @@ def ConverterNvenc(library_path, title, audio_file, video_file, sponsors):
         '-i', audio_file_str,
         '-vf', video_filter,
         '-c:v', 'hevc_nvenc',
+        '-preset', 'p5',
+        '-rc', 'vbr',
+        '-b:v', '6M',
+        '-maxrate', '8M',
+        '-bufsize', '12M',
+        '-multipass', '2pass-fullres',
+        '-bf', '3',
+        '-rc-lookahead', '20',
+        '-spatial_aq', '1', '-temporal_aq', '1', '-aq-strength', '8',
+        '-g', '150',
+        '-af', audio_filter,
+        '-c:a', 'aac', '-b:a', '192k',
+        '-movflags', 'faststart',
+        '-loglevel', 'info',
+        '-y', str(output_path)
+    ]
+    '''command = [
+        'ffmpeg',
+        '-i', video_file_str,
+        '-i', audio_file_str,
+        '-vf', video_filter,
+        '-c:v', 'hevc_nvenc',
         '-af', audio_filter,
         '-c:a', 'aac',
         '-b:a', '192k',
@@ -563,7 +585,7 @@ def ConverterNvenc(library_path, title, audio_file, video_file, sponsors):
         '-movflags', 'faststart',
         '-loglevel', 'info',
         '-y', str(output_path)
-    ]
+    ]'''
 
     # Get the total duration of the video file
     total_duration = GetVideoDuration(video_file)
