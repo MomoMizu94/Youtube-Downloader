@@ -515,9 +515,11 @@ def ConverterNvenc(library_path, title, audio_file, video_file, sponsors):
         print(f"{colors.BLUE}Debug — first segment: {sponsors[0]['segment']}{colors.ENDC}")
 
     if vf_core:
-        video_filter = f"{vf_core},format=nv12,hwupload"
+        # Safe: CPU-side select filter, then convert to NV12 and upload
+        video_filter = f"{vf_core},format=nv12,hwupload_cuda"
     else:
-        video_filter = "format=nv12,hwupload"
+        # Safe: just upload frames to GPU
+        video_filter = "format=nv12,hwupload_cuda"
 
     if af_core:
         audio_filter = f"{af_core},loudnorm=I=-16:TP=-1.5:LRA=11"
@@ -536,56 +538,27 @@ def ConverterNvenc(library_path, title, audio_file, video_file, sponsors):
     # Initialize the ffmpeg command
     command = [
         'ffmpeg',
+        '-hwaccel', 'cuda',
         '-i', video_file_str,
         '-i', audio_file_str,
         '-vf', video_filter,
         '-c:v', 'hevc_nvenc',
+        '-profile:v', 'main10',
         '-preset', 'p5',
-        '-rc', 'vbr',
-        '-b:v', '6M',
-        '-maxrate', '8M',
-        '-bufsize', '12M',
-        '-multipass', '2pass-fullres',
+        '-tune', 'hq',
+        '-rc', 'constqp',
+        '-qp', '16',
+        '-g', '240',
         '-bf', '3',
-        '-rc-lookahead', '20',
-        '-spatial_aq', '1', '-temporal_aq', '1', '-aq-strength', '8',
-        '-g', '150',
+        '-spatial_aq', '1',
+        '-temporal_aq', '1',
+        '-aq-strength', '8',
         '-af', audio_filter,
-        '-c:a', 'aac', '-b:a', '192k',
+        '-c:a', 'aac', '-b:a', '320k',
         '-movflags', 'faststart',
         '-loglevel', 'info',
         '-y', str(output_path)
     ]
-    '''command = [
-        'ffmpeg',
-        '-i', video_file_str,
-        '-i', audio_file_str,
-        '-vf', video_filter,
-        '-c:v', 'hevc_nvenc',
-        '-af', audio_filter,
-        '-c:a', 'aac',
-        '-b:a', '192k',
-        '-profile:v', 'main10',
-        '-preset:v', 'p7',
-        '-tune:v', 'uhq',
-        '-highbitdepth', '1',
-        '-multipass', 'fullres',
-        '-rc:v', 'vbr',
-        '-b:v', '0',
-        '-cq', '28',
-        '-qmin', '15',
-        '-g', '150',
-        '-keyint_min', '15',
-        '-rc-lookahead:v', '20',
-        '-unidir_b', '1',
-        '-tf_level', '4',
-        '-preset', 'fast',
-        '-bufsize', '20M',
-        '-crf', '0',
-        '-movflags', 'faststart',
-        '-loglevel', 'info',
-        '-y', str(output_path)
-    ]'''
 
     # Get the total duration of the video file
     total_duration = GetVideoDuration(video_file)
@@ -631,7 +604,8 @@ def ConverterNvenc(library_path, title, audio_file, video_file, sponsors):
 
     stdout, stderr = process.communicate()
     if process.returncode != 0:
-        print(f"{colors.RED}FFmpeg error:{colors.ENDC}\n{stderr}")
+        print(f"{colors.RED}FFmpeg exited with error code {process.returncode}.{colors.ENDC}")
+        print(f"{colors.YELLOW}Full FFmpeg stderr output:{colors.ENDC}\n{stderr}")
     else:
         print(f"\n{colors.GREEN}Video encoding complete. You can find the video here: {output_path}{colors.ENDC}")
 
@@ -643,7 +617,7 @@ def ConverterVaapi(library_path, title, audio_file, video_file, sponsors):
 
     print(f"{colors.GREEN}Encoding video using Vaapi...{colors.ENDC}")
 
-    # Sanitizing title to ensure there are no special characters that could cause issuues
+    # Sanitizing title to ensure there are no special characters that could cause issues
     safe_title = "".join(x for x in title if x.isalnum() or x.isspace()).replace(" ", "_")
     output_path = Path(library_path) / f"{safe_title}.mp4"
 
