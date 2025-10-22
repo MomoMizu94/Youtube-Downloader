@@ -118,31 +118,33 @@ def ProcessOne(url, mode, encoder_choice=None, audio_format=None):
 
     # Get platform & necessary paths
     library_path, video_file, audio_file = GetPlatformAndOperatingSystem(video_id)
+    print(f"{colors.BLUE}Saving files to: {library_path}{colors.ENDC}")
 
     # Download + encode
     return Downloader(url, title, library_path, audio_file, video_file, sponsors, mode, encoder_choice=encoder_choice, audio_format=audio_format)
 
 
 def GetPlatformAndOperatingSystem(video_id):
+    # Find home
+    home = Path.home()
 
     # For checking the platform and login name
-    ### Windows pathing has not been tested ###
     if platform.system() == 'Windows':
-        library_path = os.path.join('C:', 'users', os.getlogin(), 'Videos')
+        library_path = home / "Videos"
     elif platform.system() == 'Linux':
-        library_path = os.path.join('/', 'home', os.getlogin(), 'Videos')
-    else:
-        library_path = str(Path.home() / "Videos")
+        library_path = home / "Videos"
+
+    library_path.mkdir(parents=True, exist_ok=True)
 
     # Creates necessary paths for temp files
     if video_id:
-        video_file = Path(library_path) / f"TEMP_video_{video_id}.mp4"
-        audio_file = Path(library_path) / f"TEMP_audio_{video_id}.m4a"
+        video_file = library_path / f"TEMP_video_{video_id}.mp4"
+        audio_file = library_path / f"TEMP_audio_{video_id}.m4a"
     else:
-        video_file = Path(library_path) / "TEMP_video.mp4"
-        audio_file = Path(library_path) / "TEMP_audio.m4a"
+        video_file = library_path / "TEMP_video.mp4"
+        audio_file = library_path / "TEMP_audio.m4a"
 
-    return library_path, video_file, audio_file
+    return str(library_path), video_file, audio_file
 
 
 def GetModeOfChoice():
