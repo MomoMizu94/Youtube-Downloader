@@ -4,6 +4,7 @@ Standalone script can be found from /dist
 
 Requirements:
 ffmpeg
+deno for JS runtime
 
 
 To do list:
@@ -13,4 +14,3 @@ To do list:
 - Test pathing on Windows
 - Fix encoder prompt when mistyping wrong choice ✓
 - Playlist download (batch download) ✓
-- Enchanced error handling (?)
