@@ -1,4 +1,9 @@
 ffmpeg-python==0.2.0
 requests==2.32.3
 tqdm==4.67.1
-yt-dlp==2025.10.22
+yt-dlp==2025.11.12
+yt-dlp-ejs==0.3.1
+brotli==1.2.0
+mutagen==1.47.0
+pycryptodomex==3.23.0
+websockets==15.0.1
