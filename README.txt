@@ -4,13 +4,12 @@ Standalone script can be found from /dist
 
 Requirements:
 ffmpeg
-deno for JS runtime
+deno for JS runtime & added to your PATH variable
 
 
 To do list:
 - Executable ✓
 - Updated to yt_dlp ✓
 - Option to download audio separately ✓
-- Test pathing on Windows
 - Fix encoder prompt when mistyping wrong choice ✓
 - Playlist download (batch download) ✓
