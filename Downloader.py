@@ -573,33 +573,36 @@ def ConverterNvenc(library_path, title, audio_file, video_file, sponsors):
         bar_format='{desc}: |{bar}|{percentage:3.0f}%', colour='blue', leave=False)
 
     # Parse stderr for progress information
-    for line in process.stderr:
-        if 'frame=' in line and 'time=' in line:
+    try:
+        for line in process.stderr:
+            if 'frame=' in line and 'time=' in line:
 
-            try:
-                # Extract time, split it & convert into total seconds
-                time_str = line.split('time=')[1].split(' ')[0]
-                time_parts = time_str.split(':')
+                try:
+                    # Extract time, split it & convert into total seconds
+                    time_str = line.split('time=')[1].split(' ')[0]
+                    time_parts = time_str.split(':')
 
-                if len(time_parts) == 3:  # Expected format: hh:mm:ss.xx
-                    seconds = int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + float(time_parts[2])
+                    if len(time_parts) == 3:  # Expected format: hh:mm:ss.xx
+                        seconds = int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + float(time_parts[2])
 
-                    # Calculate the progress percentage
-                    progress = (seconds / total_duration) * 100
+                        # Calculate the progress percentage
+                        progress = (seconds / total_duration) * 100
 
-                    # Round to 2 decimals places
-                    progress = round(progress, 2)
-                    
-                    # Update to progress bar
-                    progress_bar.n = progress
-                    progress_bar.last_print_n = progress
-                    progress_bar.set_postfix_str(f'{progress}%')
-                    progress_bar.update(0)
-            
-            # If error in parsing time print an error message and continue
-            except ValueError:
-                print(f"{colors.RED}Error parsing time: {line}{colors.ENDC}")
-                continue
+                        # Round to 2 decimals places
+                        progress = round(progress, 2)
+                        
+                        # Update to progress bar
+                        progress_bar.n = progress
+                        progress_bar.last_print_n = progress
+                        progress_bar.set_postfix_str(f'{progress}%')
+                        progress_bar.update(0)
+                
+                # If error in parsing time print an error message and continue
+                except ValueError:
+                    print(f"{colors.RED}Error parsing time: {line}{colors.ENDC}")
+                    continue
+    finally:
+        progress_bar.close()
 
     # Wait for the ffmpeg process to finish
     process.wait()
@@ -686,33 +689,36 @@ def ConverterVaapi(library_path, title, audio_file, video_file, sponsors):
         bar_format='{desc}: |{bar}|{percentage:3.0f}%', colour='blue', leave=False)
 
     # Parse stderr for progress information
-    for line in process.stderr:
-        if 'frame=' in line and 'time=' in line:
+    try:
+        for line in process.stderr:
+            if 'frame=' in line and 'time=' in line:
 
-            try:
-                # Extract time, split it & convert into total seconds
-                time_str = line.split('time=')[1].split(' ')[0]
-                time_parts = time_str.split(':')
+                try:
+                    # Extract time, split it & convert into total seconds
+                    time_str = line.split('time=')[1].split(' ')[0]
+                    time_parts = time_str.split(':')
 
-                if len(time_parts) == 3:  # Expected format: hh:mm:ss.xx
-                    seconds = int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + float(time_parts[2])
+                    if len(time_parts) == 3:  # Expected format: hh:mm:ss.xx
+                        seconds = int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + float(time_parts[2])
 
-                    # Calculate the progress percentage
-                    progress = (seconds / total_duration) * 100
+                        # Calculate the progress percentage
+                        progress = (seconds / total_duration) * 100
 
-                    # Round to 2 decimals places
-                    progress = round(progress, 2)
-                    
-                    # Update to progress bar
-                    progress_bar.n = progress
-                    progress_bar.last_print_n = progress
-                    progress_bar.set_postfix_str(f'{progress}%')
-                    progress_bar.update(0)
-            
-            # If error in parsing time print an error message and continue
-            except ValueError:
-                print(f"{colors.RED}Error parsing time: {line}{colors.ENDC}")
-                continue
+                        # Round to 2 decimals places
+                        progress = round(progress, 2)
+                        
+                        # Update to progress bar
+                        progress_bar.n = progress
+                        progress_bar.last_print_n = progress
+                        progress_bar.set_postfix_str(f'{progress}%')
+                        progress_bar.update(0)
+                
+                # If error in parsing time print an error message and continue
+                except ValueError:
+                    print(f"{colors.RED}Error parsing time: {line}{colors.ENDC}")
+                    continue
+    finally:
+        progress_bar.close()
 
     # Wait for the ffmpeg process to finish
     process.wait()
@@ -793,33 +799,36 @@ def ConverterRaw(library_path, title, audio_file, video_file, sponsors):
         bar_format='{desc}: |{bar}|{percentage:3.0f}%', colour='blue', leave=False)
 
     # Parse stderr for progress information
-    for line in process.stderr:
-        if 'frame=' in line and 'time=' in line:
+    try:
+        for line in process.stderr:
+            if 'frame=' in line and 'time=' in line:
 
-            try:
-                # Extract time, split it & convert into total seconds
-                time_str = line.split('time=')[1].split(' ')[0]
-                time_parts = time_str.split(':')
+                try:
+                    # Extract time, split it & convert into total seconds
+                    time_str = line.split('time=')[1].split(' ')[0]
+                    time_parts = time_str.split(':')
 
-                if len(time_parts) == 3:  # Expected format: hh:mm:ss.xx
-                    seconds = int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + float(time_parts[2])
+                    if len(time_parts) == 3:  # Expected format: hh:mm:ss.xx
+                        seconds = int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + float(time_parts[2])
 
-                    # Calculate the progress percentage
-                    progress = (seconds / total_duration) * 100
+                        # Calculate the progress percentage
+                        progress = (seconds / total_duration) * 100
 
-                    # Round to 2 decimals places
-                    progress = round(progress, 2)
-                    
-                    # Update to progress bar
-                    progress_bar.n = progress
-                    progress_bar.last_print_n = progress
-                    progress_bar.set_postfix_str(f'{progress}%')
-                    progress_bar.update(0)
-            
-            # If error in parsing time print an error message and continue
-            except ValueError:
-                print(f"{colors.RED}Error parsing time: {line}{colors.ENDC}")
-                continue
+                        # Round to 2 decimals places
+                        progress = round(progress, 2)
+                        
+                        # Update to progress bar
+                        progress_bar.n = progress
+                        progress_bar.last_print_n = progress
+                        progress_bar.set_postfix_str(f'{progress}%')
+                        progress_bar.update(0)
+                
+                # If error in parsing time print an error message and continue
+                except ValueError:
+                    print(f"{colors.RED}Error parsing time: {line}{colors.ENDC}")
+                    continue
+    finally:
+        progress_bar.close()
 
     # Wait for the ffmpeg process to finish
     process.wait()
@@ -902,33 +911,36 @@ def ConverterAudioOnly(library_path, title, audio_file, sponsors, audio_format=N
         bar_format='{desc}: |{bar}|{percentage:3.0f}%', colour='blue', leave=False)
 
     # Parse stderr for progress information
-    for line in process.stderr:
-        if 'time=' in line:
+    try:
+        for line in process.stderr:
+            if 'time=' in line:
 
-            try:
-                # Extract time, split it & convert into total seconds
-                time_str = line.split('time=')[1].split(' ')[0]
-                time_parts = time_str.split(':')
+                try:
+                    # Extract time, split it & convert into total seconds
+                    time_str = line.split('time=')[1].split(' ')[0]
+                    time_parts = time_str.split(':')
 
-                if len(time_parts) == 3:  # Expected format: hh:mm:ss.xx
-                    seconds = int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + float(time_parts[2])
+                    if len(time_parts) == 3:  # Expected format: hh:mm:ss.xx
+                        seconds = int(time_parts[0]) * 3600 + int(time_parts[1]) * 60 + float(time_parts[2])
 
-                    # Calculate the progress percentage
-                    progress = (seconds / total_duration) * 100
+                        # Calculate the progress percentage
+                        progress = (seconds / total_duration) * 100
 
-                    # Round to 2 decimals places
-                    progress = round(progress, 2)
-                    
-                    # Update to progress bar
-                    progress_bar.n = progress
-                    progress_bar.last_print_n = progress
-                    progress_bar.set_postfix_str(f'{progress}%')
-                    progress_bar.update(0)
-            
-            # If error in parsing time print an error message and continue
-            except ValueError:
-                print(f"{colors.RED}Error parsing time: {line}{colors.ENDC}")
-                continue
+                        # Round to 2 decimals places
+                        progress = round(progress, 2)
+                        
+                        # Update to progress bar
+                        progress_bar.n = progress
+                        progress_bar.last_print_n = progress
+                        progress_bar.set_postfix_str(f'{progress}%')
+                        progress_bar.update(0)
+                
+                # If error in parsing time print an error message and continue
+                except ValueError:
+                    print(f"{colors.RED}Error parsing time: {line}{colors.ENDC}")
+                    continue
+    finally:
+        progress_bar.close()
 
     # Wait for the ffmpeg process to finish
     process.wait()
@@ -953,5 +965,18 @@ def CleanUp(video_file=None, audio_file=None):
 
 
 if __name__ == '__main__':
+    import multiprocessing
 
-    Main()
+    multiprocessing.freeze_support()
+
+    # Prevent the interactive CLI from launching
+    try:
+        if not sys.stdin or not sys.stdin.isatty():
+            sys.exit(0)
+    except Exception:
+        sys.exit(0)
+
+    try:
+        Main()
+    except EOFError:
+        sys.exit(0)
